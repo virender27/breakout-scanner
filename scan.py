@@ -34,8 +34,8 @@ OFFLINE_CSV = "nse_historical_data.csv"
 
 # ================= EMAIL CONFIG =================
 import os
-EMAIL_ADDRESS = os.environ.get("EMAIL_ADDRESS")        # GitHub Secret
-EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD")      # GitHub Secret
+EMAIL_ADDRESS = os.environ.get("virender27@gmail.com")        # GitHub Secret
+EMAIL_PASSWORD = os.environ.get("kret cevl vcdn pwoa")      # GitHub Secret
 EMAIL_RECIPIENT = EMAIL_ADDRESS
 
 # ================= UTILS =================
@@ -217,3 +217,4 @@ if final_results:
 
 else:
     print("⚠️ No breakout or near-breakout stocks found today — consider lowering thresholds.")
+
