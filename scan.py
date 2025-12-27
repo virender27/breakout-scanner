@@ -193,7 +193,7 @@ def scan_stock(symbol):
 
 # ================= RUN SCAN =================
 final_results = []
-for sym in SYMBOLS[:500]:  # optional speed limit
+for sym in SYMBOLS:  # optional speed limit
     res = scan_stock(sym)
     if res:
         final_results.extend(res)
@@ -217,4 +217,5 @@ if final_results:
 
 else:
     print("⚠️ No breakout or near-breakout stocks found today — consider lowering thresholds.")
+
 
