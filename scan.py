@@ -33,8 +33,8 @@ MAX_HOLD_DAYS = 5
 OFFLINE_CSV = "nse_historical_data.csv"  # optional offline data fallback
 
 # ================= EMAIL CONFIG =================
-EMAIL_ADDRESS = input("virender27@gmail.com: ")
-EMAIL_PASSWORD = getpass("kret cevl vcdn pwoa: ")
+EMAIL_ADDRESS = "virender27@gmail.com"
+EMAIL_PASSWORD = "kret cevl vcdn pwoa"
 EMAIL_RECIPIENT = EMAIL_ADDRESS  # send to self
 
 # ================= UTILS =================
@@ -216,4 +216,5 @@ if final_results:
 
 else:
     print("⚠️ No breakout or near-breakout stocks found today — consider lowering thresholds.")
+
 
