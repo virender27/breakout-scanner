@@ -213,7 +213,8 @@ if final_results:
     print("✅ Telegram summary sent")
 
     # Email Excel
-    send_email(excel_file, EMAIL_RECIPIENT)
+    send_email(excel_file, EMAIL_TO)
 
 else:
     print("⚠️ No breakout or near-breakout stocks found today — consider lowering thresholds.")
+
