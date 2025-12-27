@@ -1,6 +1,5 @@
 # ================= IMPORTS =================
-!pip install nsetools yfinance openpyxl --quiet
-
+# Removed !pip install line for GitHub Actions / normal Python
 import pandas as pd
 import yfinance as yf
 import numpy as np
@@ -34,8 +33,8 @@ MAX_HOLD_DAYS = 5
 OFFLINE_CSV = "nse_historical_data.csv"  # optional offline data fallback
 
 # ================= EMAIL CONFIG =================
-EMAIL_ADDRESS = input("virender27@gmail.com: ")
-EMAIL_PASSWORD = getpass("kret cevl vcdn pwoa: ")
+EMAIL_ADDRESS = input("Enter your Gmail address: ")
+EMAIL_PASSWORD = getpass("Enter your Gmail App Password: ")
 EMAIL_RECIPIENT = EMAIL_ADDRESS  # send to self
 
 # ================= UTILS =================
@@ -122,14 +121,13 @@ def scan_stock(symbol):
     today = df.iloc[-1]
     yesterday = df.iloc[-2]
 
-    # convert Series to scalars
-    close = float(today["Close"]) if not np.isscalar(today["Close"]) else today["Close"]
-    ema20 = float(today["EMA20"]) if not np.isscalar(today["EMA20"]) else today["EMA20"]
-    ema50 = float(today["EMA50"]) if not np.isscalar(today["EMA50"]) else today["EMA50"]
-    today_rsi = float(today["RSI"]) if not np.isscalar(today["RSI"]) else today["RSI"]
-    yesterday_rsi = float(yesterday["RSI"]) if not np.isscalar(yesterday["RSI"]) else yesterday["RSI"]
-    atr_val = float(today["ATR"]) if not np.isscalar(today["ATR"]) else today["ATR"]
-    today_vol = float(today["Volume"]) if not np.isscalar(today["Volume"]) else today["Volume"]
+    close = float(today["Close"])
+    ema20 = float(today["EMA20"])
+    ema50 = float(today["EMA50"])
+    today_rsi = float(today["RSI"])
+    yesterday_rsi = float(yesterday["RSI"])
+    atr_val = float(today["ATR"])
+    today_vol = float(today["Volume"])
 
     resistance_d = float(df.iloc[-LOOKBACK_DAYS-1:-1]["High"].max())
     resistance_w = float(df.iloc[-WEEK_LOOKBACK-1:-1]["High"].max())
