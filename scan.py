@@ -1,17 +1,17 @@
 # ================= IMPORTS =================
-# Removed !pip install line for GitHub Actions / normal Python
 import pandas as pd
 import yfinance as yf
 import numpy as np
 import requests
 import smtplib
 from email.message import EmailMessage
-from getpass import getpass
 import time
 import datetime as dt
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Border, Side
 import warnings
+from nsetools import Nse
+
 warnings.filterwarnings("ignore")
 
 # ================= CONFIG =================
@@ -30,12 +30,13 @@ MIN_PRICE = 20
 MIN_AVG_VOL = 100000
 ENTRY_VALID_DAYS = 2
 MAX_HOLD_DAYS = 5
-OFFLINE_CSV = "nse_historical_data.csv"  # optional offline data fallback
+OFFLINE_CSV = "nse_historical_data.csv"
 
 # ================= EMAIL CONFIG =================
-EMAIL_ADDRESS = "virender27@gmail.com"
-EMAIL_PASSWORD = "kret cevl vcdn pwoa"
-EMAIL_RECIPIENT = EMAIL_ADDRESS  # send to self
+import os
+EMAIL_ADDRESS = os.environ.get("EMAIL_ADDRESS")        # GitHub Secret
+EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD")      # GitHub Secret
+EMAIL_RECIPIENT = EMAIL_ADDRESS
 
 # ================= UTILS =================
 def send_telegram(message):
@@ -80,16 +81,16 @@ def atr(df, period=14):
     return tr.rolling(period).mean()
 
 # ================= FETCH NSE SYMBOLS =================
-from nsetools import Nse
 nse = Nse()
 all_stock_codes = nse.get_stock_codes()
+
 if isinstance(all_stock_codes, dict):
-    if 'SYMBOL' in all_stock_codes: del all_stock_codes['SYMBOL']
-    SYMBOLS = [s + ".NS" for s in all_stock_codes.keys()]
+    SYMBOLS = [s + ".NS" for s in all_stock_codes.keys() if s != "SYMBOL"]
 elif isinstance(all_stock_codes, list):
     SYMBOLS = [s + ".NS" for s in all_stock_codes]
 else:
-    raise TypeError("Unexpected return type from nse.get_stock_codes()")
+    raise TypeError("Unexpected type returned from nse.get_stock_codes()")
+
 print(f"✅ NSE symbols fetched: {len(SYMBOLS)}")
 
 # ================= FETCH DATA =================
@@ -122,8 +123,8 @@ def scan_stock(symbol):
     yesterday = df.iloc[-2]
 
     close = float(today["Close"])
-    ema20 = float(today["EMA20"])
-    ema50 = float(today["EMA50"])
+    ema20_val = float(today["EMA20"])
+    ema50_val = float(today["EMA50"])
     today_rsi = float(today["RSI"])
     yesterday_rsi = float(yesterday["RSI"])
     atr_val = float(today["ATR"])
@@ -136,7 +137,7 @@ def scan_stock(symbol):
     results = []
 
     # Confirmed Breakout
-    if (close > resistance_d and close > resistance_w and close > ema20 > ema50 and
+    if (close > resistance_d and close > resistance_w and close > ema20_val > ema50_val and
         today_rsi>45 and today_rsi>yesterday_rsi and today_vol>=avg_vol*VOL_MULT and
         (close-resistance_d)/resistance_d<=MAX_EXTENSION and close>MIN_PRICE and avg_vol>MIN_AVG_VOL):
 
@@ -163,7 +164,7 @@ def scan_stock(symbol):
         return results
 
     # Near Breakout
-    elif (close >= resistance_d*NEAR_BREAKOUT_THRESHOLD and close<resistance_d and close>ema20>ema50 and
+    elif (close >= resistance_d*NEAR_BREAKOUT_THRESHOLD and close<resistance_d and close>ema20_val>ema50_val and
           today_rsi>40 and today_vol>=avg_vol*0.8 and close>MIN_PRICE and avg_vol>MIN_AVG_VOL):
 
         buy = round(resistance_d*1.002,2)
@@ -216,5 +217,3 @@ if final_results:
 
 else:
     print("⚠️ No breakout or near-breakout stocks found today — consider lowering thresholds.")
-
-
