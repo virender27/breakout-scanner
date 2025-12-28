@@ -4,6 +4,7 @@ name: NSE Breakout scan
 on:
   schedule:
     - cron: '30 3 * * 1-5' # 9:00 IST is 3:30 UTC
+    - cron: '30 9 * * 1-5' # 15:00 IST
   workflow_dispatch:
 
 jobs:
