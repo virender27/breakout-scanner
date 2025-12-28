@@ -60,7 +60,7 @@ def send_email(file_path, recipient):
                        filename=file_name)
     try:
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
-            smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+            smtp.login(EMAIL_ADDRESS, EMAIL_APP_PASSWORD)
             smtp.send_message(msg)
         print(f"📧 Email sent to {recipient}")
     except Exception as e:
@@ -217,5 +217,6 @@ if final_results:
 
 else:
     print("⚠️ No breakout or near-breakout stocks found today — consider lowering thresholds.")
+
 
 
