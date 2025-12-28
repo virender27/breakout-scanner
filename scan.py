@@ -35,7 +35,7 @@ OFFLINE_CSV = "nse_historical_data.csv"
 
 # ================= EMAIL CONFIG =================
 EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")        # GitHub Secret
-EMAIL_APP_PASSWORD = os.getenv("EMAIL_APP_PASSWORD")  # GitHub Secret
+EMAIL_APP_PASSWORD = os.getenv("EMAIL_APP_PASSWORD")     # GitHub Secret
 EMAIL_TO = EMAIL_ADDRESS
 
 # ================= UTILS =================
@@ -83,6 +83,7 @@ def atr(df, period=14):
 # ================= FETCH NSE SYMBOLS =================
 nse = Nse()
 all_stock_codes = nse.get_stock_codes()
+
 if isinstance(all_stock_codes, dict):
     SYMBOLS = [s + ".NS" for s in all_stock_codes.keys() if s != "SYMBOL"]
 elif isinstance(all_stock_codes, list):
