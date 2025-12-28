@@ -42,7 +42,11 @@ EMAIL_TO = EMAIL_ADDRESS
 def send_telegram(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     try:
-        requests.post(url, data={"chat_id": TELEGRAM_CHAT_ID, "text": message}, timeout=5)
+        requests.post(url, data={
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": message,
+            "parse_mode": "Markdown"
+        }, timeout=5)
     except:
         print("⚠️ Telegram send failed")
 
@@ -204,15 +208,22 @@ if final_results:
     df_out.to_excel(excel_file, index=False)
     print(f"✅ Breakout scan saved: {len(df_out)} stocks")
 
-    # Telegram summary
-    summary_msg = "📊 Daily NSE Breakout Summary:\n"
+    # ================= Telegram summary =================
+    summary_msg = "📊 *Daily NSE Breakout Summary:*\n\n"
+    summary_msg += "`{:<8} {:<18} {:<6} {:<8} {:<8} {:<8} {:<8} {:<4}`\n".format(
+        "Stock", "Type", "CMP", "Breakout", "Buy", "SL", "Target", "Qty"
+    )
+
     for idx, row in df_out.iterrows():
-        summary_msg += (f"{row['Stock']} | {row['Type']} | CMP: {row['CMP']} | "
-                        f"Breakout Price: {row['Breakout_Trigger_Price']} | Buy: {row['Buy']} | SL: {row['SL']} | Target: {row['Target']} | Qty: {row['Qty']}\n")
+        summary_msg += "`{:<8} {:<18} {:<6} {:<8} {:<8} {:<8} {:<8} {:<4}`\n".format(
+            row['Stock'], row['Type'], row['CMP'], row['Breakout_Trigger_Price'],
+            row['Buy'], row['SL'], row['Target'], row['Qty']
+        )
+
     send_telegram(summary_msg)
     print("✅ Telegram summary sent")
 
-    # Email Excel
+    # ================= Email Excel =================
     send_email(excel_file, EMAIL_TO)
 
 else:
