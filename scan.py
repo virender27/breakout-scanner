@@ -34,9 +34,9 @@ OFFLINE_CSV = "nse_historical_data.csv"
 
 # ================= EMAIL CONFIG =================
 import os
-EMAIL_ADDRESS = "virender27@gmail.com"        # GitHub Secret
-EMAIL_APP_PASSWORD = "kret cevl vcdn pwoa"     # GitHub Secret
-EMAIL_TO = "virender27@gmail.com"
+EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")        # GitHub Secret
+EMAIL_APP_PASSWORD = os.getenv("EMAIL_APP_PASSWORD")     # GitHub Secret
+EMAIL_TO = EMAIL_ADDRESS
 
 # ================= UTILS =================
 def send_telegram(message):
@@ -217,4 +217,5 @@ if final_results:
 
 else:
     print("⚠️ No breakout or near-breakout stocks found today — consider lowering thresholds.")
+
 
