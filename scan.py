@@ -5,12 +5,9 @@ import numpy as np
 import requests
 import smtplib
 from email.message import EmailMessage
-import time
-import datetime as dt
-from openpyxl import load_workbook
-from openpyxl.styles import PatternFill, Border, Side
 import warnings
 from nsetools import Nse
+import os
 
 warnings.filterwarnings("ignore")
 
@@ -28,91 +25,93 @@ RR = 2
 RISK_PER_TRADE = 1000
 MIN_PRICE = 20
 MIN_AVG_VOL = 100000
-ENTRY_VALID_DAYS = 2
-MAX_HOLD_DAYS = 5
-OFFLINE_CSV = "nse_historical_data.csv"
 
 # ================= EMAIL CONFIG =================
-import os
-EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")        # GitHub Secret
-EMAIL_APP_PASSWORD = os.getenv("EMAIL_APP_PASSWORD")     # GitHub Secret
+EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
+EMAIL_APP_PASSWORD = os.getenv("EMAIL_APP_PASSWORD")
 EMAIL_TO = EMAIL_ADDRESS
+
+# ================= SAFE VALUE HELPER =================
+def safe(v):
+    if isinstance(v, pd.Series):
+        return float(v.iloc[-1])
+    return float(v)
 
 # ================= UTILS =================
 def send_telegram(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     try:
-        requests.post(url, data={"chat_id": TELEGRAM_CHAT_ID, "text": message}, timeout=5)
+        requests.post(url, data={"chat_id": TELEGRAM_CHAT_ID, "text": message}, timeout=10)
     except:
-        print("⚠️ Telegram send failed")
+        print("⚠️ Telegram failed")
 
-def send_email(file_path, recipient):
+def send_email(file_path):
+    if not EMAIL_ADDRESS or not EMAIL_APP_PASSWORD:
+        print("⚠️ Email secrets missing")
+        return
+
     msg = EmailMessage()
-    msg['Subject'] = "Daily NSE Breakout Scan"
-    msg['From'] = EMAIL_ADDRESS
-    msg['To'] = recipient
-    msg.set_content("Attached is today's NSE Breakout Scan (Confirmed + Near Breakouts).")
-    with open(file_path, 'rb') as f:
-        file_data = f.read()
-        file_name = f.name
-    msg.add_attachment(file_data, maintype='application',
-                       subtype='vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                       filename=file_name)
+    msg["Subject"] = "Daily NSE Breakout Scan"
+    msg["From"] = EMAIL_ADDRESS
+    msg["To"] = EMAIL_TO
+    msg.set_content("Attached: NSE Breakout Scan")
+
+    with open(file_path, "rb") as f:
+        msg.add_attachment(
+            f.read(),
+            maintype="application",
+            subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            filename=file_path,
+        )
+
     try:
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
             smtp.login(EMAIL_ADDRESS, EMAIL_APP_PASSWORD)
             smtp.send_message(msg)
-        print(f"📧 Email sent to {recipient}")
+        print("📧 Email sent")
     except Exception as e:
-        print("⚠️ Failed to send email:", e)
+        print("⚠️ Email failed:", e)
 
-def ema(series, period):
-    return series.ewm(span=period, adjust=False).mean()
+# ================= INDICATORS =================
+def ema(series, n):
+    return series.ewm(span=n, adjust=False).mean()
 
-def rsi(series, period=14):
+def rsi(series, n=14):
     delta = series.diff()
-    gain = delta.where(delta>0,0)
-    loss = -delta.where(delta<0,0)
-    rs = gain.rolling(period).mean()/loss.rolling(period).mean()
-    return 100-(100/(1+rs))
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    rs = gain.rolling(n).mean() / loss.rolling(n).mean()
+    return 100 - (100 / (1 + rs))
 
-def atr(df, period=14):
-    tr = pd.concat([df["High"]-df["Low"], abs(df["High"]-df["Close"].shift()), abs(df["Low"]-df["Close"].shift())], axis=1).max(axis=1)
-    return tr.rolling(period).mean()
+def atr(df, n=14):
+    tr = pd.concat([
+        df["High"] - df["Low"],
+        (df["High"] - df["Close"].shift()).abs(),
+        (df["Low"] - df["Close"].shift()).abs()
+    ], axis=1).max(axis=1)
+    return tr.rolling(n).mean()
 
-# ================= FETCH NSE SYMBOLS =================
+# ================= NSE SYMBOLS =================
 nse = Nse()
-all_stock_codes = nse.get_stock_codes()
-
-if isinstance(all_stock_codes, dict):
-    SYMBOLS = [s + ".NS" for s in all_stock_codes.keys() if s != "SYMBOL"]
-elif isinstance(all_stock_codes, list):
-    SYMBOLS = [s + ".NS" for s in all_stock_codes]
-else:
-    raise TypeError("Unexpected type returned from nse.get_stock_codes()")
-
+codes = nse.get_stock_codes()
+SYMBOLS = [s + ".NS" for s in codes if s != "SYMBOL"]
 print(f"✅ NSE symbols fetched: {len(SYMBOLS)}")
 
 # ================= FETCH DATA =================
-def fetch_data(symbol):
+def fetch(symbol):
     try:
         df = yf.download(symbol, period="4mo", progress=False)
-        if len(df) < 60: return None
+        if df is None or len(df) < 60:
+            return None
         return df
     except:
-        try:
-            df_all = pd.read_csv(OFFLINE_CSV, parse_dates=['Date'])
-            df_symbol = df_all[df_all['Symbol']==symbol.replace(".NS","")].copy()
-            df_symbol.set_index('Date', inplace=True)
-            if len(df_symbol) < 60: return None
-            return df_symbol
-        except:
-            return None
+        return None
 
-# ================= SCAN FUNCTION =================
+# ================= SCAN =================
 def scan_stock(symbol):
-    df = fetch_data(symbol)
-    if df is None: return None
+    df = fetch(symbol)
+    if df is None:
+        return None
 
     df["EMA20"] = ema(df["Close"], 20)
     df["EMA50"] = ema(df["Close"], 50)
@@ -122,102 +121,96 @@ def scan_stock(symbol):
     today = df.iloc[-1]
     yesterday = df.iloc[-2]
 
-    close = float(today["Close"])
-    ema20_val = float(today["EMA20"])
-    ema50_val = float(today["EMA50"])
-    today_rsi = float(today["RSI"])
-    yesterday_rsi = float(yesterday["RSI"])
-    atr_val = float(today["ATR"])
-    today_vol = float(today["Volume"])
+    close = safe(today["Close"])
+    ema20 = safe(today["EMA20"])
+    ema50 = safe(today["EMA50"])
+    rsi_t = safe(today["RSI"])
+    rsi_y = safe(yesterday["RSI"])
+    atr_v = safe(today["ATR"])
+    vol = safe(today["Volume"])
 
-    resistance_d = float(df.iloc[-LOOKBACK_DAYS-1:-1]["High"].max())
-    resistance_w = float(df.iloc[-WEEK_LOOKBACK-1:-1]["High"].max())
-    avg_vol = float(df.iloc[-LOOKBACK_DAYS-1:-1]["Volume"].mean())
+    res_d = safe(df.iloc[-LOOKBACK_DAYS-1:-1]["High"].max())
+    res_w = safe(df.iloc[-WEEK_LOOKBACK-1:-1]["High"].max())
+    avg_vol = safe(df.iloc[-LOOKBACK_DAYS-1:-1]["Volume"].mean())
 
-    results = []
+    if close < MIN_PRICE or avg_vol < MIN_AVG_VOL:
+        return None
 
-    # Confirmed Breakout
-    if (close > resistance_d and close > resistance_w and close > ema20_val > ema50_val and
-        today_rsi>45 and today_rsi>yesterday_rsi and today_vol>=avg_vol*VOL_MULT and
-        (close-resistance_d)/resistance_d<=MAX_EXTENSION and close>MIN_PRICE and avg_vol>MIN_AVG_VOL):
-
-        buy = round(today["High"]*1.002,2)
-        sl = round(buy - atr_val*ATR_MULT,2)
+    # CONFIRMED
+    if (
+        close > res_d and
+        close > res_w and
+        close > ema20 > ema50 and
+        rsi_t > 45 and rsi_t > rsi_y and
+        vol >= avg_vol * VOL_MULT and
+        (close - res_d) / res_d <= MAX_EXTENSION
+    ):
+        buy = round(safe(today["High"]) * 1.002, 2)
+        sl = round(buy - atr_v * ATR_MULT, 2)
         risk = buy - sl
-        if risk <= 0: return None
-        target = round(buy + risk*RR,2)
-        qty = int(RISK_PER_TRADE/risk)
-        results.append({
-            "Stock": symbol.replace(".NS",""),
+        if risk <= 0:
+            return None
+
+        return [{
+            "Stock": symbol.replace(".NS", ""),
             "Type": "Confirmed Breakout",
-            "CMP": round(close,2),
-            "Daily_Res": round(resistance_d,2),
-            "Weekly_Res": round(resistance_w,2),
+            "CMP": round(close, 2),
             "Buy": buy,
             "SL": sl,
-            "Target": target,
-            "Breakout_Trigger_Price": buy,
-            "Qty": qty,
-            "RSI": round(today_rsi,1),
-            "Vol_X": round(today_vol/avg_vol,2),
-        })
-        return results
+            "Target": round(buy + risk * RR, 2),
+            "Qty": int(RISK_PER_TRADE / risk),
+            "RSI": round(rsi_t, 1),
+            "Vol_X": round(vol / avg_vol, 2),
+        }]
 
-    # Near Breakout
-    elif (close >= resistance_d*NEAR_BREAKOUT_THRESHOLD and close<resistance_d and close>ema20_val>ema50_val and
-          today_rsi>40 and today_vol>=avg_vol*0.8 and close>MIN_PRICE and avg_vol>MIN_AVG_VOL):
-
-        buy = round(resistance_d*1.002,2)
-        sl = round(buy - atr_val*ATR_MULT,2)
+    # NEAR
+    if (
+        close >= res_d * NEAR_BREAKOUT_THRESHOLD and
+        close < res_d and
+        close > ema20 > ema50 and
+        rsi_t > 40 and
+        vol >= avg_vol * 0.8
+    ):
+        buy = round(res_d * 1.002, 2)
+        sl = round(buy - atr_v * ATR_MULT, 2)
         risk = buy - sl
-        if risk <= 0: return None
-        target = round(buy + risk*RR,2)
-        qty = int(RISK_PER_TRADE/risk)
-        results.append({
-            "Stock": symbol.replace(".NS",""),
+        if risk <= 0:
+            return None
+
+        return [{
+            "Stock": symbol.replace(".NS", ""),
             "Type": "Near Breakout",
-            "CMP": round(close,2),
-            "Daily_Res": round(resistance_d,2),
-            "Weekly_Res": round(resistance_w,2),
+            "CMP": round(close, 2),
             "Buy": buy,
             "SL": sl,
-            "Target": target,
-            "Breakout_Trigger_Price": round(resistance_d*1.002,2),
-            "Qty": qty,
-            "RSI": round(today_rsi,1),
-            "Vol_X": round(today_vol/avg_vol,2),
-        })
-        return results
+            "Target": round(buy + risk * RR, 2),
+            "Qty": int(RISK_PER_TRADE / risk),
+            "RSI": round(rsi_t, 1),
+            "Vol_X": round(vol / avg_vol, 2),
+        }]
 
     return None
 
-# ================= RUN SCAN =================
-final_results = []
-for sym in SYMBOLS[:500]:  # optional speed limit
-    res = scan_stock(sym)
-    if res:
-        final_results.extend(res)
+# ================= RUN =================
+results = []
+for sym in SYMBOLS[:500]:
+    r = scan_stock(sym)
+    if r:
+        results.extend(r)
 
-if final_results:
-    df_out = pd.DataFrame(final_results).sort_values("Vol_X", ascending=False)
-    excel_file = "breakout_scan.xlsx"
-    df_out.to_excel(excel_file, index=False)
-    print(f"✅ Breakout scan saved: {len(df_out)} stocks")
+if results:
+    df = pd.DataFrame(results).sort_values("Vol_X", ascending=False)
+    file = "breakout_scan.xlsx"
+    df.to_excel(file, index=False)
+    print(f"✅ Breakout scan saved: {len(df)} stocks")
 
-    # Telegram summary
-    summary_msg = "📊 Daily NSE Breakout Summary:\n"
-    for idx, row in df_out.iterrows():
-        summary_msg += (f"{row['Stock']} | {row['Type']} | CMP: {row['CMP']} | "
-                        f"Breakout Price: {row['Breakout_Trigger_Price']} | Buy: {row['Buy']} | SL: {row['SL']} | Target: {row['Target']} | Qty: {row['Qty']}\n")
-    send_telegram(summary_msg)
-    print("✅ Telegram summary sent")
-
-    # Email Excel
-    send_email(excel_file, EMAIL_TO)
-
+    msg = "📊 NSE Breakout Summary\n"
+    for _, r in df.iterrows():
+        msg += (
+            f"{r['Stock']} | {r['Type']} | CMP {r['CMP']} | "
+            f"Buy {r['Buy']} | SL {r['SL']} | Target {r['Target']} | Qty {r['Qty']}\n"
+        )
+    send_telegram(msg)
+    send_email(file)
 else:
-    print("⚠️ No breakout or near-breakout stocks found today — consider lowering thresholds.")
-
-
-
-
+    print("⚠️ No breakout found today")
