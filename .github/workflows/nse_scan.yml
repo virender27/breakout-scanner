@@ -3,8 +3,7 @@ name: NSE Breakout scan
 # Trigger every weekday at 9:00 AM IST, also allows manual run
 on:
   schedule:
-    - cron: '30 3 * * 1-5' # 9:00 IST is 3:30 UTC
-    - cron: '30 9 * * 1-5' # 15:00 IST
+    - cron: '30 3,9 * * 1-5' # 9:00 IST is 3:30 UTC
   workflow_dispatch:
 
 jobs:
